@@ -12,11 +12,7 @@ public class MavenParser {
         List<String> dependencies = new ArrayList<>();
         
         try {
-            System.out.println("Запрашиваю зависимости: " + groupId + ":" + artifactId + ":" + version);
-            
             String pomUrl = buildPomUrl(groupId, artifactId, version, repoUrl);
-            System.out.println("URL POM: " + pomUrl);
-            
             String pomContent = downloadPomFile(pomUrl);
             dependencies = parseDependenciesFromPom(pomContent);
             
@@ -45,8 +41,8 @@ public class MavenParser {
             URL pomUrl = new URL(url);
             connection = (HttpURLConnection) pomUrl.openConnection();
             connection.setRequestMethod("GET");
-            connection.setConnectTimeout(10000);
-            connection.setReadTimeout(10000);
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
             
             int responseCode = connection.getResponseCode();
             if (responseCode != 200) {
@@ -88,13 +84,17 @@ public class MavenParser {
             String groupId = getElementText(dependency, "groupId");
             String artifactId = getElementText(dependency, "artifactId");
             String version = getElementText(dependency, "version");
+            String scope = getElementText(dependency, "scope");
+            
+            if ("test".equals(scope)) {
+                continue;
+            }
+            if (version == null || version.contains("$")) {
+                continue;
+            }
             
             if (groupId != null && artifactId != null) {
-                String dep = groupId + ":" + artifactId;
-                if (version != null) {
-                    dep += ":" + version;
-                }
-                dependencies.add(dep);
+                dependencies.add(groupId + ":" + artifactId + ":" + version);
             }
         }
         

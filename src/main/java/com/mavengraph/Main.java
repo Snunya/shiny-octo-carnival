@@ -1,6 +1,7 @@
 package com.mavengraph;
 
 import java.util.*;
+import java.io.*;
 
 public class Main {
     public static void main(String[] args) {
@@ -11,38 +12,63 @@ public class Main {
             System.out.println(entry.getKey() + " = " + entry.getValue());
         }
         
-        System.out.println("\n=== Этап 2: Сбор данных ===");
-        
         if (config.isTestMode()) {
-            System.out.println("Тестовый режим активирован");
-            System.out.println("Используется файл: " + config.getTestRepoPath());
+            runTestMode(config);
         } else {
-            String[] parts = config.getPackageName().split(":");
-            if (parts.length != 2) {
-                System.err.println("Ошибка: неверный формат package. Должен быть groupId:artifactId");
-                System.exit(1);
-            }
-            
-            String groupId = parts[0];
-            String artifactId = parts[1];
-            
-            MavenParser parser = new MavenParser();
-            List<String> dependencies = parser.getDependencies(
-                groupId, artifactId, config.getVersion(), config.getRepoUrl()
-            );
-            
-            System.out.println("\n=== Прямые зависимости ===");
-            if (dependencies.isEmpty()) {
-                System.out.println("Зависимостей не найдено");
-            } else {
-                for (int i = 0; i < dependencies.size(); i++) {
-                    System.out.println((i + 1) + ". " + dependencies.get(i));
-                }
-                System.out.println("Всего: " + dependencies.size() + " зависимостей");
-            }
+            runRealMode(config);
         }
         
-        System.out.println("\nЭтап 2 выполнен");
+        System.out.println("\nВыполнение завершено");
+    }
+    
+    private static void runTestMode(Config config) {
+        System.out.println("\n=== Тестовый режим ===");
+        
+        try {
+            DependencyGraph graph = new DependencyGraph();
+            graph.buildFromTestFile(config.getTestRepoPath());
+            graph.printGraph();
+            
+            System.out.println("\nВсего узлов: " + graph.getAllNodes().size());
+            if (!graph.getCycles().isEmpty()) {
+                System.out.println("Обнаружено циклов: " + graph.getCycles().size());
+            }
+        } catch (IOException e) {
+            System.err.println("Ошибка чтения файла: " + e.getMessage());
+        }
+    }
+    
+    private static void runRealMode(Config config) {
+        String[] parts = config.getPackageName().split(":");
+        if (parts.length != 2) {
+            System.err.println("Ошибка: неверный формат package");
+            System.exit(1);
+        }
+        
+        String groupId = parts[0];
+        String artifactId = parts[1];
+        
+        System.out.println("\n=== Этап 2: Прямые зависимости ===");
+        MavenParser parser = new MavenParser();
+        List<String> dependencies = parser.getDependencies(
+            groupId, artifactId, config.getVersion(), config.getRepoUrl()
+        );
+        
+        if (dependencies.isEmpty()) {
+            System.out.println("Зависимостей не найдено");
+        } else {
+            for (int i = 0; i < dependencies.size(); i++) {
+                System.out.println((i + 1) + ". " + dependencies.get(i));
+            }
+            System.out.println("Всего: " + dependencies.size() + " зависимостей");
+        }
+        
+        System.out.println("\n=== Этап 3: Граф зависимостей ===");
+        DependencyGraph graph = new DependencyGraph(2); // Глубина 2 для теста
+        DependencyNode rootNode = graph.getOrCreateNode(groupId, artifactId, config.getVersion());
+        
+        graph.buildGraph(rootNode, parser, config.getRepoUrl());
+        graph.printGraph();
     }
     
     private static Config parseArguments(String[] args) {
@@ -137,7 +163,7 @@ public class Main {
         System.out.println("  --output <имя>                   Имя файла графа");
         System.out.println("  --help                           Справка");
         System.out.println("\nПримеры:");
-        System.out.println("  java -jar maven-dep-graph.jar --package org.springframework:spring-core --version 5.3.23");
+        System.out.println("  java -jar maven-dep-graph.jar --package com.google.code.gson:gson --version 2.10.1");
         System.out.println("  java -jar maven-dep-graph.jar --test-mode --test-repo-path test.txt");
     }
 }
